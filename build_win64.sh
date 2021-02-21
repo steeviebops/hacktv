@@ -12,12 +12,12 @@ cd build_win64
 
 if [[ ! -f $PREFIX/lib/libusb-1.0.a ]]; then
 	
-	if [[ ! -f libusb-1.0.22.tar.bz2 ]]; then
-		wget https://github.com/libusb/libusb/releases/download/v1.0.22/libusb-1.0.22.tar.bz2
-		tar -xvjf libusb-1.0.22.tar.bz2
+	if [[ ! -f libusb-1.0.24.tar.bz2 ]]; then
+		wget https://github.com/libusb/libusb/releases/download/v1.0.24/libusb-1.0.24.tar.bz2
+		tar -xvjf libusb-1.0.24.tar.bz2
 	fi
 	
-	cd libusb-1.0.22
+	cd libusb-1.0.24
 	./configure --host=$HOST --prefix=$PREFIX --enable-static --disable-shared
 	make -j4 install
 	cd ..
@@ -79,15 +79,56 @@ fi
 
 if [[ ! -f $PREFIX/lib/libopus.a ]]; then
 	
-	if [[ ! -f opus-1.3.tar.gz ]]; then
-		wget https://archive.mozilla.org/pub/opus/opus-1.3.tar.gz
-		tar -xvzf opus-1.3.tar.gz
+	if [[ ! -f opus-1.3.1.tar.gz ]]; then
+		wget https://archive.mozilla.org/pub/opus/opus-1.3.1.tar.gz
+		tar -xvzf opus-1.3.1.tar.gz
 	fi
 	
-	cd opus-1.3
+	cd opus-1.3.1
 	./configure --host=$HOST --prefix=$PREFIX --enable-static --disable-shared --disable-doc --disable-extra-programs
 	make -j4 install
 	cd ..
+fi
+
+if [[ ! -f $PREFIX/lib/libz.a ]]; then
+
+        if [[ ! -f zlib-1.2.11.tar.gz ]]; then
+                wget http://zlib.net/zlib-1.2.11.tar.gz
+		tar xzvf zlib-1.2.11.tar.gz
+        fi
+
+        cd zlib-1.2.11
+	CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-ar RANLIB=x86_64-w64-mingw32-ranlib \
+	./configure --prefix=$PREFIX --static
+	make -j4 install
+        cd ..
+fi
+
+if [[ ! -f $PREFIX/lib/libfreetype.a ]]; then
+
+        if [[ ! -f freetype-2.10.4.tar.gz ]]; then
+                wget https://download.savannah.gnu.org/releases/freetype/freetype-2.10.4.tar.gz
+		tar xzvf freetype-2.10.4.tar.gz
+        fi
+
+        cd freetype-2.10.4
+	./configure --prefix=$PREFIX --disable-shared --with-pic --host=$HOST --without-zlib --with-png=no --with-harfbuzz=no
+	make -j4 install
+        cd ..
+fi
+
+if [[ ! -f $PREFIX/lib/libpng16.a ]]; then
+
+        if [[ ! -f libpng-1.6.37.tar.gz ]]; then
+                wget https://download.sourceforge.net/libpng/libpng-1.6.37.tar.gz
+		tar xzvf libpng-1.6.37.tar.gz
+        fi
+
+        cd libpng-1.6.37
+        CPPFLAGS="-I$PREFIX/include" LDFLAGS="-L$PREFIX/lib" \
+        ./configure --prefix=$PREFIX --host=$HOST
+	make -j4 install
+        cd ..
 fi
 
 if [[ ! -f $PREFIX/lib/libavformat.a ]]; then
@@ -99,8 +140,8 @@ if [[ ! -f $PREFIX/lib/libavformat.a ]]; then
 	cd ffmpeg
 	./configure \
 		--enable-gpl --enable-nonfree --enable-libfdk-aac --enable-libopus \
-		--enable-static --disable-shared --disable-programs \
-		--disable-outdevs --disable-encoders \
+		--enable-static --disable-shared --disable-programs --enable-zlib \
+		--enable-libfreetype --disable-outdevs --disable-encoders \
 		--arch=x86_64 --target-os=mingw64 --cross-prefix=$HOST- \
 		--pkg-config=pkg-config --prefix=$PREFIX
 	make -j4 install
@@ -113,4 +154,5 @@ mv -f hacktv hacktv.exe || true
 $HOST-strip hacktv.exe
 
 echo "Done"
+
 
