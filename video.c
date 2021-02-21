@@ -598,13 +598,9 @@ const vid_config_t vid_config_ntsc_m = {
 	.qu_co          =  0.493,
 	.qv_co          =  0.000,
 	
-	// .fm_mono_carrier    = 4500000, /* Hz */
-	// .fm_audio_preemph   = 0.000075, /* Seconds */
-	// .fm_audio_deviation = 25000, /* +/- Hz */
-	
-	.fm_mono_carrier    = 6000000 - 400, /* Hz */
-	.fm_audio_preemph   = 0.000050, /* Seconds */
-	.fm_audio_deviation = 50000, /* +/- Hz */
+	.fm_mono_carrier    = 4500000, /* Hz */
+	.fm_audio_preemph   = 0.000075, /* Seconds */
+	.fm_audio_deviation = 25000, /* +/- Hz */
 };
 
 const vid_config_t vid_config_ntsc_fm = {
@@ -3420,6 +3416,12 @@ void vid_free(vid_t *s)
 
 void vid_info(vid_t *s)
 {
+	/* Disable line buffering on Windows systems, required for hacktv-gui */
+	#ifdef WIN32
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
+	#endif
+
 	fprintf(stderr, "Video: %dx%d %.2f fps (full frame %dx%d)\n",
 		s->active_width, s->conf.active_lines,
 		(double) s->conf.frame_rate_num / s->conf.frame_rate_den,

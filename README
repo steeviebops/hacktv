@@ -1,5 +1,25 @@
  -[ HackTV - Analogue TV transmitter for the HackRF ]-
 
+This is a fork of https://github.com/captainjack64/hacktv with some minor changes
+to focus on Windows portability. These changes have been added via conditional
+statements, so nothing I've added should impact on the ability to compile this on
+non-Windows systems. Fedora 32 required.
+
+Pre-requisite commands:
+dnf -y install https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+dnf -y install https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+dnf -y install ffmpeg
+dnf -y install ffmpeg-devel
+dnf -y install git make libtool mingw64-gcc mingw64-gcc-c++ mingw64-winpthreads-static mingw64-pkg-config cmake yasm nasm
+dnf -y install hackrf-devel osmo-fl2k-devel SoapySDR-devel ffmpeg-devel
+
+Compile using ./build_win64.sh
+
+All credit goes to fsphil and Captain Jack
+
+Original README below
+=====================
+
 This is a fork of https://github.com/fsphil/hacktv with some additional features
 added. Most of them are those which I personally use, though not necessarily
 warrant inclusions into original source.

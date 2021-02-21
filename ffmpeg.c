@@ -778,7 +778,15 @@ static void *_video_scaler_thread(void *arg)
 		if(av->s->conf.timestamp)
 		{
 			char timestr[20];
+
+			/* Windows seems to process this differently, why I don't know. */
+			/* The orginal calculation results in a negative result and won't load unless --position 60 or higher is specified too. */
+			#ifndef WIN32
 			time_t diff = time(0) - av->s->conf.timestamp  + (av->s->conf.position * 60) - 3600;
+			#else
+			time_t diff = time(0) - av->s->conf.timestamp  + (av->s->conf.position * 60);
+			#endif
+
 			struct tm *d = localtime(&diff);
 			sprintf(timestr, "%02d:%02d:%02d", d->tm_hour, d->tm_min, d->tm_sec);
 			print_generic_text(	av->font[1],
