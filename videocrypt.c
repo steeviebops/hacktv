@@ -48,7 +48,7 @@
 
 /* PPV card data */
 /*                                   |--------CARD SERIAL-------|    Ka    Kb */
-static uint8_t _ppv_card_data[7] = { 0x6D, 0xC1, 0x08, 0x44, 0x02, 0x28, 0x3D};
+static uint8_t _ppv_card_data[7] = { 0x6D, 0xC1, 0x08, 0x48, 0x00, 0x0B, 0x21};
 
 /* Packet header sequences */
 static const uint8_t _sequence[8] = {
