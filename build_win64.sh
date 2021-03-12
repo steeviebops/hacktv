@@ -12,12 +12,12 @@ cd build_win64
 
 if [[ ! -f $PREFIX/lib/libusb-1.0.a ]]; then
 	
-	if [[ ! -f libusb-1.0.24.tar.bz2 ]]; then
-		wget https://github.com/libusb/libusb/releases/download/v1.0.24/libusb-1.0.24.tar.bz2
-		tar -xvjf libusb-1.0.24.tar.bz2
+	if [[ ! -f libusb-1.0.22.tar.bz2 ]]; then
+		wget https://github.com/libusb/libusb/releases/download/v1.0.22/libusb-1.0.22.tar.bz2
+		tar -xvjf libusb-1.0.22.tar.bz2
 	fi
 	
-	cd libusb-1.0.24
+	cd libusb-1.0.22
 	./configure --host=$HOST --prefix=$PREFIX --enable-static --disable-shared
 	make -j4 install
 	cd ..
