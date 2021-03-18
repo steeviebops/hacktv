@@ -59,7 +59,6 @@
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
 #include "hacktv.h"
-#include  "ascii.h"
 
 /* Maximum length of the packet queue */
 /* Taken from ffplay.c */
@@ -159,9 +158,13 @@ typedef struct {
 	pthread_t audio_scaler_thread;
 	volatile int thread_abort;
 	
-	/* Filter */	
+	/* Video filter buffers */
 	AVFilterContext *vbuffersink_ctx;
 	AVFilterContext *vbuffersrc_ctx;
+	
+	/* Audio filter buffers */
+	AVFilterContext *abuffersink_ctx;
+	AVFilterContext *abuffersrc_ctx;
 	AVRational sar, dar;
 	
 } av_ffmpeg_t;
@@ -379,7 +382,6 @@ static void _frame_dbuffer_abort(_frame_dbuffer_t *d)
 static AVFrame *_frame_dbuffer_back_buffer(_frame_dbuffer_t *d)
 {
 	AVFrame *frame;
-	
 	pthread_mutex_lock(&d->mutex);
 	
 	/* Wait for the ready flag to be unset */
@@ -447,61 +449,6 @@ static AVFrame *_frame_dbuffer_flip(_frame_dbuffer_t *d)
 	pthread_mutex_unlock(&d->mutex);
 	
 	return(frame);
-}
-
-static uint32_t *_overlay_text(void *private, char *logotext, int pos)
-{
-	av_ffmpeg_t *av = private;
-	
-	int l, x, y, z, charindex = 0;
-	int logotextlength = strlen(logotext);
-	uint32_t c;
-		
-	for (z=0 ; z < logotextlength; z++)
-	{
-		/* Find char index within ASCII table */
-		for(l=0;l<CHARS;l++)  if(toupper(logotext[z]) == chars[l]) charindex = l;
-
-		for (x=0; x < CHAR_WIDTH * LOGO_SCALE; x++) 
-		{
-				for(y=0; y < CHAR_HEIGHT * LOGO_SCALE; y++)
-				{
-						c = (ascii[(y / LOGO_SCALE * CHAR_WIDTH + x / LOGO_SCALE) + (CHAR_WIDTH * CHAR_HEIGHT * charindex)  ] ==  ' ' ? 0x000000 : 0xFFFFFF ) ;
-						av->video[(av->height * 2 / pos + y) * av->width + ((av->width - CHAR_WIDTH * (logotextlength - z * 2) * LOGO_SCALE) / 2 ) + x] = c;
-				 }
-			}
-	}
-	
-	return(av->video);
-}
-
-static int _seek_screen(void *private, vid_t *s)
-{
-	av_ffmpeg_t *av = private;
-	int x, y;
-	
-	av->video = malloc(vid_get_framebuffer_length(s));
-	if(!av->video)
-	{
-		free(av);
-		return(HACKTV_OUT_OF_MEMORY);
-	}
-	
-	for(y = 100; y < s->conf.active_lines; y++)
-	{
-		for(x = 100; x < s->active_width; x++)
-		{		
-			av->video[y * s->active_width + x] = 0x00000000;	
-		}
-	}
-	/* Overlay the logo */
-	av->width = s->active_width;
-	av->height = s->conf.active_lines;
-	
-	_overlay_text(av,"PLEASE WAIT", 5);	
-	_overlay_text(av,"SEEKING VIDEO", 4);	
-	
-	return(HACKTV_OK);
 }
 
 static void *_input_thread(void *arg)
@@ -681,14 +628,15 @@ static void *_video_decode_thread(void *arg)
 			/* Push the decoded frame into the filtergraph */
 			if (av_buffersrc_add_frame(av->vbuffersrc_ctx, frame) < 0) 
 			{
-					printf( "Error while feeding the video filtergraph\n");
+				printf( "Error while feeding the video filtergraph\n");
 			}
 
 			/* Pull filtered frame from the filtergraph */ 
 			if(av_buffersink_get_frame(av->vbuffersink_ctx, frame) < 0) 
 			{
 				printf( "Error while sourcing the video filtergraph\n");
-} 
+			}
+			
 			/* We have received a frame! */
 			av_frame_ref(_frame_dbuffer_back_buffer(&av->in_video_buffer), frame);
 			_frame_dbuffer_ready(&av->in_video_buffer, 0);
@@ -775,26 +723,6 @@ static void *_video_scaler_thread(void *arg)
 			INT_MAX
 		);
 		
-		if(av->s->conf.timestamp)
-		{
-			char timestr[20];
-
-			/* Windows seems to process this differently, why I don't know. */
-			/* The orginal calculation results in a negative result and won't load unless --position 60 or higher is specified too. */
-			#ifndef WIN32
-			time_t diff = time(0) - av->s->conf.timestamp  + (av->s->conf.position * 60) - 3600;
-			#else
-			time_t diff = time(0) - av->s->conf.timestamp  + (av->s->conf.position * 60);
-			#endif
-
-			struct tm *d = localtime(&diff);
-			sprintf(timestr, "%02d:%02d:%02d", d->tm_hour, d->tm_min, d->tm_sec);
-			print_generic_text(	av->font[1],
-								(uint32_t *) oframe->data[0],
-								timestr,
-								10, 90, 1, 0, 0, 0);
-		}
-		
 		/* Print subtitles, if enabled */
 		if(av->s->conf.subtitles) 
 		{
@@ -814,12 +742,6 @@ static void *_video_scaler_thread(void *arg)
 			}
 		}
 		
-		/* Print logo, if enabled */
-		if(av->s->conf.logo)
-		{
-			overlay_image((uint32_t *) oframe->data[0], &av->s->vid_logo, av->s->active_width, av->s->conf.active_lines, IMG_POS_TR);
-		}
-		
 		av_frame_unref(frame);
 		
 		_frame_dbuffer_ready(&av->out_video_buffer, 0);
@@ -828,7 +750,7 @@ static void *_video_scaler_thread(void *arg)
 	
 	_frame_dbuffer_abort(&av->out_video_buffer);
 	
-	//fprintf(stderr, "_video_scaler_thread(): Ending\n");
+	// fprintf(stderr, "_video_scaler_thread(): Ending\n");
 	
 	return(NULL);
 }
@@ -858,12 +780,57 @@ static uint32_t *_av_ffmpeg_read_video(void *private, float *ratio)
 		
 		if(frame->sample_aspect_ratio.den > 0 && frame->height > 0)
 		{
+			if(!av->s->conf.letterbox && !av->s->conf.pillarbox)
+			{
+				*ratio = (float) av->video_codec_ctx->width / av->video_codec_ctx->height;
+			}
+		}
+		
+		/*
+		if(av->s->conf.letterbox || av->s->conf.pillarbox)
+		{
 			*ratio  = (float) frame->sample_aspect_ratio.num / frame->sample_aspect_ratio.den;
 			*ratio *= (float) frame->width / frame->height;
 		}
+		*/
+		
 	}
 	
-	return (av->seekflag >= 2 ? (uint32_t *) frame->data[0] : av->video);
+	if(!av->seekflag)
+	{
+		memset(frame->data[0],0x1A, vid_get_framebuffer_length(av->s));
+		print_generic_text(	av->font[2], (uint32_t *) frame->data[0],
+							"SEEKING VIDEO",
+							50, 47, 1, 0, 0, 0);
+		
+		print_generic_text(	av->font[2], (uint32_t *) frame->data[0],
+							"PLEASE WAIT",
+							50, 53, 1, 0, 0, 0);
+	}
+
+	/* Print logo, if enabled */
+	if(av->s->conf.logo)
+	{
+		overlay_image((uint32_t *) frame->data[0], &av->s->vid_logo, av->s->active_width, av->s->conf.active_lines, IMG_POS_TR);
+	}
+
+	if(av->s->conf.timestamp)
+	{
+		char timestr[20];
+		#ifndef WIN32
+		time_t diff = time(0) - av->s->conf.timestamp  + (av->s->conf.position * 60) - 3600;
+		#else
+		time_t diff = time(0) - av->s->conf.timestamp  + (av->s->conf.position * 60);
+		#endif
+		struct tm *d = localtime(&diff);
+		sprintf(timestr, "%02d:%02d:%02d", d->tm_hour, d->tm_min, d->tm_sec);
+		print_generic_text(	av->font[1],
+							(uint32_t *) frame->data[0],
+							timestr,
+							10, 90, 1, 0, 0, 0);
+	}
+	
+	return ((uint32_t *) frame->data[0]);
 }
 
 static void *_audio_decode_thread(void *arg)
@@ -906,6 +873,18 @@ static void *_audio_decode_thread(void *arg)
 		
 		if(r == 0)
 		{
+			/* Push the decoded frame into the filtergraph */
+			if (av_buffersrc_add_frame(av->abuffersrc_ctx, frame) < 0) 
+			{
+				fprintf(stderr, "Error while feeding the audio filtergraph\n");
+			}
+
+			/* Pull filtered frame from the filtergraph */ 
+			if(av_buffersink_get_frame(av->abuffersink_ctx, frame) < 0) 
+			{
+				fprintf(stderr, "Error while sourcing the video filtergraph\n");
+			}
+			
 			/* We have received a frame! */
 			av_frame_ref(_frame_dbuffer_back_buffer(&av->in_audio_buffer), frame);
 			_frame_dbuffer_ready(&av->in_audio_buffer, 0);
@@ -1111,7 +1090,8 @@ int av_ffmpeg_open(vid_t *s, char *input_url)
 	int r;
 	int i;
 	
-	float source_ratio;
+	/* Default ratio */
+	float source_ratio = 4.0 / 3.0;
 	
 	av = calloc(1, sizeof(av_ffmpeg_t));
 	if(!av)
@@ -1121,8 +1101,6 @@ int av_ffmpeg_open(vid_t *s, char *input_url)
 	
 	av->width = s->active_width;
 	av->height = s->conf.active_lines;
-		
-	_seek_screen(av,s);
 	
 	/* Use 'pipe:' for stdin */
 	if(strcmp(input_url, "-") == 0)
@@ -1248,7 +1226,7 @@ int av_ffmpeg_open(vid_t *s, char *input_url)
 		asprintf(&_filter_args,"video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
 			av->video_codec_ctx->width, av->video_codec_ctx->height, av->video_codec_ctx->pix_fmt,
 			av->video_stream->r_frame_rate.num, av->video_stream->r_frame_rate.den,
-	    av->video_codec_ctx->sample_aspect_ratio.num, av->video_codec_ctx->sample_aspect_ratio.den);
+			av->video_codec_ctx->sample_aspect_ratio.num, av->video_codec_ctx->sample_aspect_ratio.den);
 
 		if(avfilter_graph_create_filter(&av->vbuffersrc_ctx, vbuffersrc, "in",_filter_args, NULL, vfilter_graph) < 0) 
 		{
@@ -1304,7 +1282,7 @@ int av_ffmpeg_open(vid_t *s, char *input_url)
 			}
 			else
 			{
-				if((video_width_ws / s->conf.active_lines) <= (source_width / source_height))
+				if((float) video_width_ws / (float) s->conf.active_lines <= source_ratio)
 				{
 					asprintf(&_vid_filter,"pad = 'iw:iw / (%i/%i) : 0 : (oh-ih) / 2', scale = %i:%i", video_width_ws, s->conf.active_lines, source_width, source_height);
 				}
@@ -1316,17 +1294,16 @@ int av_ffmpeg_open(vid_t *s, char *input_url)
 		}
 		
 		asprintf(&_vfi, "[in]%s[out]", _vid_filter);
-		// fprintf(stderr,"Using filter %s\n", _vfi);
 		
 		const char *vfilter_descr = _vfi;
 
-		if (avfilter_graph_parse_ptr(vfilter_graph, vfilter_descr, &vinputs, &voutputs, NULL) < 0)
+		if(avfilter_graph_parse_ptr(vfilter_graph, vfilter_descr, &vinputs, &voutputs, NULL) < 0)
 		{
 			fprintf(stderr, "Cannot parse filter graph\n");
 			return(HACKTV_ERROR);
 		}
 		
-	 if (avfilter_graph_config(vfilter_graph, NULL) < 0) 
+		if(avfilter_graph_config(vfilter_graph, NULL) < 0) 
 		{
 			fprintf(stderr, "Cannot configure filter graph\n");
 			return(HACKTV_ERROR);
@@ -1397,6 +1374,76 @@ int av_ffmpeg_open(vid_t *s, char *input_url)
 			return(HACKTV_ERROR);
 		}
 		
+		/* Audio filter graph here */
+		char *_afi;
+		char *_afilter_args;
+		AVFilterGraph *afilter_graph;
+		
+		/* Deprecated - to be removed in later versions */
+		#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 9, 100)
+		avfilter_register_all();
+		#endif
+		
+		const AVFilter *abuffersrc  = avfilter_get_by_name("abuffer");
+		const AVFilter *abuffersink = avfilter_get_by_name("abuffersink");
+		AVFilterInOut *aoutputs = avfilter_inout_alloc();
+		AVFilterInOut *ainputs  = avfilter_inout_alloc();
+		afilter_graph = avfilter_graph_alloc();
+
+		asprintf(&_afilter_args, "time_base=%d/%d:sample_rate=%d:sample_fmt=%s:channel_layout=0x%" PRIx64,
+			av->audio_codec_ctx->time_base.num, av->audio_codec_ctx->time_base.den, av->audio_codec_ctx->sample_rate,
+			av_get_sample_fmt_name(av->audio_codec_ctx->sample_fmt),
+			av->audio_codec_ctx->channel_layout);
+	
+		if(avfilter_graph_create_filter(&av->abuffersrc_ctx, abuffersrc, "in", _afilter_args, NULL, afilter_graph) < 0) 
+		{
+			fprintf(stderr, "Cannot create audio buffer source\n");
+			return(HACKTV_ERROR);
+		}
+		
+		if(avfilter_graph_create_filter(&av->abuffersink_ctx, abuffersink, "out", NULL, NULL, afilter_graph) < 0) 
+		{
+			fprintf(stderr, "Cannot create audio buffer sink\n");
+			return(HACKTV_ERROR);
+		}
+
+		/* Endpoints for the audio filter graph. */
+		aoutputs->name       = av_strdup("in");
+		aoutputs->filter_ctx = av->abuffersrc_ctx;
+		aoutputs->pad_idx    = 0;
+		aoutputs->next       = NULL;
+
+		ainputs->name       = av_strdup("out");
+		ainputs->filter_ctx = av->abuffersink_ctx;
+		ainputs->pad_idx    = 0;
+		ainputs->next       = NULL;
+		
+		char fmt[5];
+		sprintf(fmt,"%s", av_get_sample_fmt_name(av->audio_codec_ctx->sample_fmt));
+		asprintf(&_afi,
+				"[in]%s[downmix],[downmix]volume=%f:precision=%s[out]",
+				s->conf.downmix ? "pan=stereo|FL < FC + 0.30*FL + 0.30*BL|FR < FC + 0.30*FR + 0.30*BR" : "anull",
+				s->conf.volume,
+				fmt[0] == 'f' ? "float" : fmt[0] == 'd' ? "double" : "fixed"
+		);
+		
+		const char *afilter_descr = _afi;
+		
+		if (avfilter_graph_parse_ptr(afilter_graph, afilter_descr, &ainputs, &aoutputs, NULL) < 0)
+		{
+			fprintf(stderr,"Cannot parse filter graph %s\n", _afi);
+			return(HACKTV_ERROR);
+		}
+		
+		if (avfilter_graph_config(afilter_graph, NULL) < 0) 
+		{
+			printf("Cannot configure filter graph\n");
+			return(HACKTV_ERROR);
+		}
+		
+		avfilter_inout_free(&ainputs);
+		avfilter_inout_free(&aoutputs);
+		
 		/* Create the audio time_base using the source sample rate */
 		av->audio_time_base.num = 1;
 		av->audio_time_base.den = av->audio_codec_ctx->sample_rate;
@@ -1421,7 +1468,8 @@ int av_ffmpeg_open(vid_t *s, char *input_url)
 			av->audio_codec_ctx->channel_layout = av_get_default_channel_layout(av->audio_codec_ctx->channels);
 		}
 		
-		av_opt_set_int(av->swr_ctx, "in_channel_layout",    av->audio_codec_ctx->channel_layout, 0);
+		/* Channel layout changes to stereo if using downmix option */
+		av_opt_set_int(av->swr_ctx, "in_channel_layout",    s->conf.downmix ? AV_CH_LAYOUT_STEREO : av->audio_codec_ctx->channel_layout, 0);
 		av_opt_set_int(av->swr_ctx, "in_sample_rate",       av->audio_codec_ctx->sample_rate, 0);
 		av_opt_set_sample_fmt(av->swr_ctx, "in_sample_fmt", av->audio_codec_ctx->sample_fmt, 0);
 		
@@ -1566,6 +1614,12 @@ int av_ffmpeg_open(vid_t *s, char *input_url)
 		av->font[1] = s->av_font;
 	}
 	
+	/* Generic font */
+	if(font_init(s, 56, source_ratio) == VID_OK)
+	{
+		av->font[2] = s->av_font;
+	};
+		
 	/* Register the callback functions */
 	av->s = s;
 	s->av_private = av;

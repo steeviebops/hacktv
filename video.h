@@ -173,6 +173,8 @@ typedef struct {
 	char *wss;
 	int letterbox;
 	int pillarbox;
+	float volume;
+	int downmix;
 	
 	char *videocrypt;
 	char *videocrypt2;
