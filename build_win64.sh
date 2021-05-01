@@ -140,7 +140,7 @@ if [[ ! -f $PREFIX/lib/libpng16.a ]]; then
 fi
 
 # libiconv, pre-requisite for zvbi
-if [[ ! -f $PREFIX/lib/libcharset.a ]]; then
+if [[ ! -f $PREFIX/lib/libiconv.a ]]; then
 
     if [[ ! -f libiconv-1.16.tar.gz ]]; then
         wget https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.16.tar.gz
@@ -154,7 +154,7 @@ if [[ ! -f $PREFIX/lib/libcharset.a ]]; then
 fi
 
 # zvbi, required for handling teletext subtitles in transport streams
-if [[ ! -f $PREFIX/lib/libzvbi2.a ]]; then
+if [[ ! -f $PREFIX/lib/libzvbi.a ]]; then
 
     if [[ ! -f zvbi-0.2.35.tar.bz2 ]]; then
         wget https://download.sourceforge.net/project/zapping/zvbi/0.2.35/zvbi-0.2.35.tar.bz2
