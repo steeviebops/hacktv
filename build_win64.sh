@@ -35,7 +35,9 @@ if [[ ! -f $PREFIX/lib/libhackrf.a ]]; then
 	rm -rf hackrf-2018.01.1/host/libhackrf/build
 	mkdir -p hackrf-2018.01.1/host/libhackrf/build
 	cd hackrf-2018.01.1/host/libhackrf/build
-	mingw64-cmake \
+	cmake .. \
+		-DCMAKE_SYSTEM_NAME=Windows \
+		-DCMAKE_C_COMPILER=$HOST-gcc \
 		-DCMAKE_INSTALL_PREFIX=$PREFIX \
 		-DCMAKE_INSTALL_LIBPREFIX=$PREFIX/lib \
 		-DLIBUSB_INCLUDE_DIR=$PREFIX/include/libusb-1.0 \
@@ -56,7 +58,9 @@ if [[ ! -f $PREFIX/lib/libosmo-fl2k.a ]]; then
 	rm -rf osmo-fl2k/build
 	mkdir -p osmo-fl2k/build
 	cd osmo-fl2k/build
-	mingw64-cmake \
+	cmake .. \
+		-DCMAKE_SYSTEM_NAME=Windows \
+		-DCMAKE_C_COMPILER=$HOST-gcc \
 		-DCMAKE_INSTALL_PREFIX=$PREFIX \
 		-DCMAKE_INSTALL_LIBPREFIX=$PREFIX \
 		-DCMAKE_INSTALL_LIBDIR=$PREFIX/lib \
@@ -90,7 +94,7 @@ if [[ ! -f $PREFIX/lib/libopus.a ]]; then
 	fi
 	
 	cd opus-1.3.1
-	./configure --host=$HOST --prefix=$PREFIX --enable-static --disable-shared --disable-doc --disable-extra-programs
+	./configure CFLAGS='-D_FORTIFY_SOURCE=0' --host=$HOST --prefix=$PREFIX --enable-static --disable-shared --disable-doc --disable-extra-programs
 	make -j4 install
 	cd ..
 fi
