@@ -450,27 +450,27 @@ static void _update_udt(uint8_t udt[25], time_t timestamp)
 	
 	/* Windows implements localtime differently, using localtime_s rather than localtime_r */
 	#ifndef WIN32
-	/* Get the timezone offset */
-	localtime_r(&timestamp, &tm);
-	i = tm.tm_gmtoff / 1800;
-	if(i < 0) i = -i | (1 << 5);
+		/* Get the timezone offset */
+		localtime_r(&timestamp, &tm);
+		i = tm.tm_gmtoff / 1800;
+		if(i < 0) i = -i | (1 << 5);
 	
-	/* Calculate Modified Julian Date */
-	gmtime_r(&timestamp, &tm);
-	mjd = 367.0 * (1900 + tm.tm_year)
-	    - (int) (7.0 * (1900 + tm.tm_year + (int) ((1 + tm.tm_mon + 9.0) / 12.0)) / 4.0)
-	    + (int) (275.0 * (1 + tm.tm_mon) / 9.0) + tm.tm_mday - 678987.0;
+		/* Calculate Modified Julian Date */
+		gmtime_r(&timestamp, &tm);
+		mjd = 367.0 * (1900 + tm.tm_year)
+		- (int) (7.0 * (1900 + tm.tm_year + (int) ((1 + tm.tm_mon + 9.0) / 12.0)) / 4.0)
+		+ (int) (275.0 * (1 + tm.tm_mon) / 9.0) + tm.tm_mday - 678987.0;
 	#else
-	/* Get the timezone offset */
-        localtime_s(&tm, &timestamp);
-        i = _timezone / 1800;
-        if(i < 0) i = -i | (1 << 5);
+		/* Get the timezone offset */
+		localtime_s(&tm, &timestamp);
+		i = _timezone / 1800;
+		if(i < 0) i = -i | (1 << 5);
 	
-	/* Calculate Modified Julian Date */
-        gmtime_s(&tm, &timestamp);
-        mjd = 367.0 * (1900 + tm.tm_year)
-            - (int) (7.0 * (1900 + tm.tm_year + (int) ((1 + tm.tm_mon + 9.0) / 12.0)) / 4.0)
-            + (int) (275.0 * (1 + tm.tm_mon) / 9.0) + tm.tm_mday - 678987.0;
+		/* Calculate Modified Julian Date */
+		gmtime_s(&tm, &timestamp);
+		mjd = 367.0 * (1900 + tm.tm_year)
+		- (int) (7.0 * (1900 + tm.tm_year + (int) ((1 + tm.tm_mon + 9.0) / 12.0)) / 4.0)
+		+ (int) (275.0 * (1 + tm.tm_mon) / 9.0) + tm.tm_mday - 678987.0;
 	#endif
 	
 	/* Set the Unified Date and Time sequence */

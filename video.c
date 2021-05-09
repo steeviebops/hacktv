@@ -3486,8 +3486,8 @@ void vid_info(vid_t *s)
 {
 	/* Disable line buffering on Windows systems, required for hacktv-gui */
 	#ifdef WIN32
-	setvbuf(stdout, NULL, _IONBF, 0);
-	setvbuf(stderr, NULL, _IONBF, 0);
+		setvbuf(stdout, NULL, _IONBF, 0);
+		setvbuf(stderr, NULL, _IONBF, 0);
 	#endif
 
 	fprintf(stderr, "Video: %dx%d %.2f fps (full frame %dx%d)\n",
