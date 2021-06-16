@@ -108,7 +108,7 @@ if [[ ! -f $PREFIX/lib/libz.a ]]; then
     fi
 
     cd zlib-1.2.11
-    CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-ar RANLIB=x86_64-w64-mingw32-ranlib \
+    CC=$HOST-gcc AR=$HOST-ar RANLIB=$HOST-ranlib \
     ./configure --prefix=$PREFIX --static
     make -j4 install
     cd ..
